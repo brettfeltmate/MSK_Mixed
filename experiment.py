@@ -1,5 +1,14 @@
 # -*- coding: utf-8 -*-
 
+# 1 of 3 experiments developed to replicate both:
+# McLaughlin, Shore, & Klein (2001) ~ Wherein T1 difficulty was mixed within blocks
+# Shore, McLaughlin, & Klein (2001) ~ Wherein T1 diffculty was blocked
+
+# The 3 experiements are structured as follows:
+# MSK_Combined: 3 blocks of blocked T1 difficulty & 3 blocks of mixed T1 difficulty (present paradigm)
+# MSK_Mixed: 15 blocks of mixed T1 difficulty
+# MSK_Blocked: 3 blocks of blocked T1 difficulty
+
 __author__ = "Brett Feltmate"
 
 import klibs
@@ -40,6 +49,7 @@ letters = ['A', 'B', 'C', 'D', 'E', 'F',
 
 class MSK_Mixed(klibs.Experiment):
 
+	# Establishes factors held constant throughout experiment
 	def setup(self):
 		# Stimulus durations
 		# T2|M2|ISI durations held constant
@@ -63,10 +73,11 @@ class MSK_Mixed(klibs.Experiment):
 		target_size = deg_to_px(0.6)
 
 		# Init drawbjects
-		self.fixation = FixationCross(size=fix_size, thickness=fix_thickness, fill=WHITE)
+		self.fixation = FixationCross(size=fix_size, thickness=fix_thickness, fill=BLACK)
 
 		# Experiment messages
-		self.anykey_txt = "{0}\nPress any key to continue."
+		self.anykey_txt = "{0}\nPress any key to continue..."
+		self.practice_txt = '{0}\n(PRACTICE ROUND)'
 		self.t1_id_request = "What was the first letter? If unsure, make your best guess."
 		self.t2_id_request = "What was the second letter? If unsure, make your best guess."
 
@@ -83,30 +94,29 @@ class MSK_Mixed(klibs.Experiment):
 			 sdl2.SDLK_u, sdl2.SDLK_v, sdl2.SDLK_w, sdl2.SDLK_x, sdl2.SDLK_y, sdl2.SDLK_z]
 		)
 
+		# Insert practice block at beginning
 		if P.run_practice_blocks:
 			self.insert_practice_block(1, trial_counts=30)
 
+	# Establishes block-wise factors
 	def block(self):
-
+		# Inform participant as to their progress
 		block_txt = "Block {0} of {1}".format(P.block_number, P.blocks_per_experiment)
-		progress_txt = self.anykey_txt.format(block_txt)
 
 		if P.practicing: 
-			progress_txt += "\n(This is a practice block)"
+			block_txt = self.practice_txt.format(block_txt)
 
-		progress_msg = message(progress_txt, align='center', blit_txt=False)
+		progress_txt = block_txt.format(self.anykey_txt)
 
-		fill()
-		blit(progress_msg,5,P.screen_c)
-		flip()
-		any_key()
+		self.present_txt(progress_txt)
 
+	# Set response collector parameters
 	def setup_response_collector(self):
-		self.t1_rc.terminate_after = [10, TK_S]
-		self.t1_rc.display_callback = self.identity_callback
-		self.t1_rc.display_kwargs = {'target': 'T1'}
-		self.t1_rc.keypress_listener.key_map = self.keymap
-		self.t1_rc.keypress_listener.interrupts = True
+		self.t1_rc.terminate_after = [10, TK_S]					# Timeout after 10s of no response
+		self.t1_rc.display_callback = self.identity_callback	# Request identity response
+		self.t1_rc.display_kwargs = {'target': 'T1'}			# Specify which response to request
+		self.t1_rc.keypress_listener.key_map = self.keymap		# Set which responses are allowed
+		self.t1_rc.keypress_listener.interrupts = True			# Abort collection once response made
 
 		self.t2_rc.terminate_after = [10, TK_S]
 		self.t2_rc.display_callback = self.identity_callback
@@ -114,90 +124,75 @@ class MSK_Mixed(klibs.Experiment):
 		self.t2_rc.keypress_listener.key_map = self.keymap
 		self.t2_rc.keypress_listener.interrupts = True
 
-
-
+	# Any trials factors that can be established prior to trial onset are set here
 	def trial_prep(self):
-		# Select target stimuli
+		# Select target stimuli & durations
 		self.t1_identity, self.t2_identity = random.sample(letters,2)
 		self.t1_duration, self.m1_duration = self.t1_timings[self.t1_difficulty]
 		
-
 		# Init EventManager
-		events = [[self.isoa, "T1_on"]]
-		events.append([events[-1][0] + self.t1_duration, 'T1_off'])
-		events.append([events[-1][0] + self.isi, "T1_mask_on"])
-		events.append([events[-1][0] + self.m1_duration, 'T1_mask_off'])
-		events.append([events[-4][0] + self.ttoa, 'T2_on']) # SOA = Time between onset of T1 & T2
-		events.append([events[-1][0] + self.t2_duration, 'T2_off'])
-		events.append([events[-1][0] + self.isi, 'T2_mask_on'])
-		events.append([events[-1][0] + self.t2_duration, 'T2_mask_off'])
+		events = [[self.isoa, "T1_on"]]										# Present T1 after some SOA from initiation
+		events.append([events[-1][0] + self.t1_duration, 'T1_off'])			# Remove T1 after its duration period
+		events.append([events[-1][0] + self.isi, "T1_mask_on"])				# Present M1 shortly after T1 offset
+		events.append([events[-1][0] + self.m1_duration, 'T1_mask_off'])	# Remove M1 after its duration period
+		events.append([events[-4][0] + self.ttoa, 'T2_on']) 				# TTOA = Time between onset of T1 & T2
+		events.append([events[-1][0] + self.t2_duration, 'T2_off'])			# Remove T2 after its duration period
+		events.append([events[-1][0] + self.isi, 'T2_mask_on'])				# Present M2 shortly after T2 offset
+		events.append([events[-1][0] + self.m2_duration, 'T2_mask_off'])	# Remove M2 after its duration period
 
+		# Register events to EventManager
 		for e in events:
 			self.evm.register_ticket(ET(e[1],e[0]))
 
+		# Prepare stimulus stream
 		self.tmtm_stream = self.prep_stream()
 
+		# Hide mouse cursor during trial
 		hide_mouse_cursor()
 
+		# Present fix and wait until initiation response before beginning tiral sequence
 		self.present_fixation()
 
-
 	def trial(self):
+		while self.evm.before('T1_on', True): ui_request()			# Variable delay following trial initiation
 
-		while self.evm.before('T1_on', True):
-			ui_request()
+		self.blit_it(self.tmtm_stream['t1_target'])					# Blit T1 to screen
+		while self.evm.before('T1_off', True): ui_request()			# Wait (conditional duration)
+		self.flip_it()												# Remove T1
 
-		# Present T1
-		fill()
-		blit(self.tmtm_stream['t1_target'], location=P.screen_c, registration=5)
-		flip()
+		while self.evm.before('T1_mask_on', True): ui_request() 	# Wait (ISI; fixed at ~17ms)
 
-		while self.evm.before('T1_mask_on', True): ui_request()
+		self.blit_it(self.tmtm_stream['t1_mask'])					# Blit M1 to screen
+		while self.evm.before('T1_mask_off', True): ui_request()	# Wait (conditional duration)
+		self.flip_it()												# Remove M1
 
-		fill()
-		blit(self.tmtm_stream['t1_mask'], registration=5, location=P.screen_c)
-		flip()
+		while self.evm.before('T2_on', True): ui_request()			# Wait (TTOA)
 
-		while self.evm.before('T1_mask_off', True): ui_request()
+		self.blit_it(self.tmtm_stream['t2_target'])					# Blit T2 to screen
+		while self.evm.before('T2_off', True): ui_request()			# Wait (fixed at ~50ms)
+		self.flip_it()												# Remove T2
 
-		fill()
-		flip()
+		while self.evm.before('T2_mask_on', True): ui_request()		# Wait (ISI; fixed at ~17ms)
 
-		while self.evm.before('T2_on', True): ui_request()
+		self.blit_it(self.tmtm_stream['t2_mask'])					# Blit M2 to screen
+		while self.evm.before('T2_mask_off', True): ui_request()	# Wait (fixed at ~50ms)
+		self.flip_it()												# Remove M2
 
-		fill()
-		blit(self.tmtm_stream['t2_target'], registration=5, location=P.screen_c)
-		flip()
+		self.t1_rc.collect()										# Request T1 identity
+		self.t2_rc.collect()										# Request T2 identity
 
-		while self.evm.before('T2_off', True): ui_request()
-
-		fill()
-		flip()
-
-		while self.evm.before('T2_mask_on', True): ui_request()
-
-		fill()
-		blit(self.tmtm_stream['t2_mask'], registration=5, location=P.screen_c)
-		flip()
-		
-		while self.evm.before('T2_mask_off', True): ui_request()
-
-		fill()
-		flip()
-
-		self.t1_rc.collect()
-		self.t2_rc.collect()
-
+		# Save responses
 		t1_response = self.t1_rc.keypress_listener.response(rt=False)
 		t2_response = self.t2_rc.keypress_listener.response(rt=False)
 
+		# Clear remaining stimuli from screen
 		clear()
 
-
+		# Log trial factors & responses
 		return {
-			"practicing": str(P.practicing),
 			"block_num": P.block_number,
 			"trial_num": P.trial_number,
+			"practicing": str(P.practicing),
 			"isoa": self.isoa,
 			"isi": self.isi,
 			"ttoa": self.ttoa,
@@ -220,13 +215,29 @@ class MSK_Mixed(klibs.Experiment):
 	def clean_up(self):
 		pass
 
-	def present_fixation(self):
+	# Clears screen when called
+	def flip_it(self):
 		fill()
-		blit(self.fixation, location=P.screen_c, registration=5)
 		flip()
 
+	# Presents passed 'it' centre-screen
+	def blit_it(self, it):
+		fill()
+		blit(it, registration=5, location=P.screen_c)
+		flip()
+
+	# Presents passed txt centre-screen, hangs until keypress
+	def present_txt(self, txt):
+		msg = message(txt, align='center', blit_txt=False)
+		self.blit_it(msg)
 		any_key()
 
+	# Presents fix centre-screen, hangs until keypress
+	def present_fixation(self):
+		self.blit_it(self.fixation)
+		any_key()
+
+	# Request identity response from participants
 	def identity_callback(self, target):
 		# Request appropriate identity
 		identity_request_msg = self.t1_id_request if target == "T1" else self.t2_id_request
@@ -235,7 +246,9 @@ class MSK_Mixed(klibs.Experiment):
 		message(identity_request_msg, location=P.screen_c, registration=5, blit_txt=True)
 		flip()
 
+	# Prepares stimulus stream
 	def prep_stream(self):
+		# Prepare unique masks for each target
 		self.t1_mask = self.generate_mask()
 		self.t2_mask = self.generate_mask()
 
@@ -248,6 +261,7 @@ class MSK_Mixed(klibs.Experiment):
 
 		return stream_items
 
+	# Generates target masks
 	def generate_mask(self):
 		# Set mask size
 		canvas_size = deg_to_px(1)
@@ -258,7 +272,6 @@ class MSK_Mixed(klibs.Experiment):
 
 		# Initialize canvas to be painted w/ mask cells
 		canvas = Image.new('RGBA', [canvas_size, canvas_size], (0,0,0,0))
-
 		surface = aggdraw.Draw(canvas)
 
 		# Initialize pen to draw cell outlines

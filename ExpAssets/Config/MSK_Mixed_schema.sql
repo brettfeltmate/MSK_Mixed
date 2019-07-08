@@ -12,9 +12,9 @@ CREATE TABLE participants (
 CREATE TABLE trials (
 	id integer primary key autoincrement not null,
 	participant_id integer not null references participants(id),
-	practicing text not null,
 	block_num integer not null,
 	trial_num integer not null,
+	practicing text not null,
 	isoa text not null,
 	isi text not null,
 	ttoa text not null,
